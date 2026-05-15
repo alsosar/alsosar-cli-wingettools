@@ -148,6 +148,9 @@ function Show-InteractiveMenu {
     $quit        = $false
     $result      = $null
 
+    $oldCursor = $host.UI.RawUI.CursorSize
+    $host.UI.RawUI.CursorSize = 0
+
     function Get-Filtered {
         param([string]$F)
         if ([string]::IsNullOrWhiteSpace($F)) { return $AllItems }
@@ -175,7 +178,7 @@ function Show-InteractiveMenu {
             $cursor = [Math]::Min($cursor, $fc - 1)
         }
 
-        Clear-Host
+        $host.UI.RawUI.CursorPosition = @{ X = 0; Y = 0 }
         Show-AsosarBanner
         Write-Host ''
 
@@ -298,7 +301,8 @@ function Show-InteractiveMenu {
         }
     } while (-not $quit)
 
-    Clear-Host
+    $host.UI.RawUI.CursorSize = $oldCursor
+    $host.UI.RawUI.CursorPosition = @{ X = 0; Y = 0 }
     Show-AsosarBanner
     return $result
 }
