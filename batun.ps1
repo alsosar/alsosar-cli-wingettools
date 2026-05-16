@@ -98,25 +98,39 @@ function Get-UninstallCommand {
         return @{
             Command     = 'powershell'
             Arguments   = "-NoProfile -Command `"Remove-AppxPackage -Package '$($Item.ProductCode)' -Confirm:`$false`""
+            Method      = 'powershell'
         }
     }
 
-    if ($Item.Type -eq 'MSI' -and $Item.ProductCode -match '^\{[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}\}$') {
-        return @{
-            Command     = 'msiexec'
-            Arguments   = "/x $($Item.ProductCode) /qn /norestart"
+    if ($Item.Type -eq 'MSI') {
+        $code = $Item.ProductCode
+        if ($code -match '^{?[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}}?$') {
+            $code = $code -replace '^\{|\}$', ''
+            return @{
+                Command     = 'msiexec'
+                Arguments   = "/x {$code} /qn /norestart"
+                Method      = 'msiexec'
+            }
+        }
+        $str = $Item.UninstallString
+        if ($str -match 'msiexec') {
+            $argPart = $str -replace 'msiexec\s*/i\s*', '/x '
+            $argPart = $argPart -replace 'msiexec(/[a-z]+)*\s*', ''
+            return @{
+                Command     = 'msiexec'
+                Arguments   = "$argPart /qn /norestart"
+                Method      = 'msiexec'
+            }
         }
     }
 
     $str = if ($Item.QuietString) { $Item.QuietString } else { $Item.UninstallString }
     if (-not $str) { return $null }
 
-    if ($str -match '^"([^"]+)"\s*(.*)$') {
-        return @{ Command = $matches[1]; Arguments = $matches[2] }
-    } elseif ($str -match '^(\S+)\s+(.*)$') {
-        return @{ Command = $matches[1]; Arguments = $matches[2] }
-    } else {
-        return @{ Command = $str; Arguments = '' }
+    return @{
+        Command     = "$env:ComSpec"
+        Arguments   = "/c `"$str`""
+        Method      = 'cmd'
     }
 }
 
@@ -129,9 +143,22 @@ function Invoke-UninstallItem {
     }
 
     try {
-        $proc = Start-Process -FilePath $cmd.Command -ArgumentList $cmd.Arguments -Wait -PassThru -NoNewWindow -ErrorAction SilentlyContinue
-        $ok = ($proc.ExitCode -eq 0 -or $proc.ExitCode -eq 3010)
-        return [PSCustomObject]@{ Name = $Item.DisplayName; Success = $ok; ExitCode = $proc.ExitCode; Error = '' }
+        if ($cmd.Method -eq 'msiexec') {
+            $proc = Start-Process -FilePath $cmd.Command -ArgumentList $cmd.Arguments -Wait -PassThru -ErrorAction SilentlyContinue
+        } elseif ($cmd.Method -eq 'powershell') {
+            $proc = Start-Process -FilePath $cmd.Command -ArgumentList $cmd.Arguments -Wait -PassThru -ErrorAction SilentlyContinue
+        } else {
+            $proc = Start-Process -FilePath $cmd.Command -ArgumentList $cmd.Arguments -Wait -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
+        }
+
+        if ($null -eq $proc) {
+            $proc = Start-Process -FilePath $cmd.Command -ArgumentList $cmd.Arguments -Wait -PassThru -WindowStyle Hidden -ErrorAction SilentlyContinue
+        }
+
+        $exitCode = if ($proc) { $proc.ExitCode } else { -1 }
+        $ok = ($exitCode -eq 0 -or $exitCode -eq 3010 -or $exitCode -eq 1641 -or $exitCode -eq 2359302)
+        $errMsg = if ($ok -or $null -eq $proc) { '' } else { "Exit code: $exitCode" }
+        return [PSCustomObject]@{ Name = $Item.DisplayName; Success = $ok; ExitCode = $exitCode; Error = $errMsg }
     } catch {
         return [PSCustomObject]@{ Name = $Item.DisplayName; Success = $false; ExitCode = -1; Error = $_.Exception.Message }
     }
