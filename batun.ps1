@@ -411,48 +411,69 @@ if ($all.Count -eq 0) {
     return
 }
 
-$selected = Show-InteractiveMenu -AllItems $all
-if (-not $selected -or $selected.Count -eq 0) {
-    Write-Host '  No programs selected. Exiting.' -ForegroundColor DarkGray
+$keepGoing = $true
+while ($keepGoing) {
+    $selected = Show-InteractiveMenu -AllItems $all
+    if (-not $selected -or $selected.Count -eq 0) {
+        Write-Host '  No programs selected. Exiting.' -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  Press any key to exit...'
+        $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+        $keepGoing = $false
+        continue
+    }
+
+    $confirmed = $false
+    $doMenu = $true
+    while ($doMenu) {
+        $host.UI.RawUI.CursorPosition = @{ X = 0; Y = 0 }
+        Show-AsosarBanner
+        Write-Host ''
+        Write-Host '  ===============================================' -ForegroundColor Yellow
+        Write-Host "  You are about to uninstall $($selected.Count) program(s):" -ForegroundColor Yellow
+        foreach ($item in $selected) {
+            Write-Host "    * $($item.DisplayName)  [$($item.Type)]" -ForegroundColor DarkYellow
+        }
+        Write-Host '  ===============================================' -ForegroundColor Yellow
+        Write-Host ''
+        Write-Host '  [Y] Proceed with uninstall' -ForegroundColor Green
+        Write-Host '  [N] Cancel — back to program list' -ForegroundColor Yellow
+        Write-Host '  [Q] Quit'
+        Write-Host ''
+
+        $confirmKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+        switch ([char]$confirmKey.Character) {
+            'y' { $confirmed = $true; $doMenu = $false }
+            'Y' { $confirmed = $true; $doMenu = $false }
+            'n' { $doMenu = $false }
+            'N' { $doMenu = $false }
+            'q' { $doMenu = $false; $keepGoing = $false }
+            'Q' { $doMenu = $false; $keepGoing = $false }
+        }
+    }
+
+    if (-not $confirmed) { continue }
+
+    $host.UI.RawUI.CursorPosition = @{ X = 0; Y = 0 }
+    Show-AsosarBanner
     Write-Host ''
-    Write-Host '  Press any key to exit...'
-    $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-    return
+    Invoke-BatchUninstall -Items $selected
+
+    if ($isAdmin) {
+        Write-Host ''
+        Write-Host '  Tip: Some programs may leave leftovers. Consider running a cleanup tool.' -ForegroundColor DarkGray
+    } else {
+        Write-Host ''
+        Write-Host '  Tip: Run as Administrator for better results with system-level programs.' -ForegroundColor DarkGray
+    }
+
+    Write-Host ''
+    $host.UI.RawUI.CursorPosition = @{ X = 0; Y = 0 }
+    Show-AsosarBanner
+    Write-Host ''
+    Write-Host '  [Enter] Back to program list' -ForegroundColor Yellow
+    Write-Host '  [Q] Quit'
+    Write-Host ''
+    $exitKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    if ($exitKey.VirtualKeyCode -eq 81) { $keepGoing = $false }
 }
-
-Write-Host ''
-Write-Host '  ===============================================' -ForegroundColor Yellow
-Write-Host "  You are about to uninstall $($selected.Count) program(s):" -ForegroundColor Yellow
-foreach ($item in $selected) {
-    Write-Host "    * $($item.DisplayName)  [$($item.Type)]" -ForegroundColor DarkYellow
-}
-Write-Host '  ===============================================' -ForegroundColor Yellow
-Write-Host ''
-Write-Host '  Press ' -NoNewline
-Write-Host 'Y' -NoNewline -ForegroundColor Green
-Write-Host ' to proceed, or any other key to cancel: ' -NoNewline
-
-$confirmKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-if ([char]$confirmKey.Character -ne 'y' -and [char]$confirmKey.Character -ne 'Y') {
-    Write-Host ''
-    Write-Host '  Cancelled.' -ForegroundColor DarkGray
-    Write-Host ''
-    Write-Host '  Press any key to exit...'
-    $null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-    return
-}
-
-Write-Host ''
-Invoke-BatchUninstall -Items $selected
-
-if ($isAdmin) {
-    Write-Host ''
-    Write-Host '  Tip: Some programs may leave leftovers. Consider running a cleanup tool.' -ForegroundColor DarkGray
-} else {
-    Write-Host ''
-    Write-Host '  Tip: Run as Administrator for better results with system-level programs.' -ForegroundColor DarkGray
-}
-
-Write-Host ''
-Write-Host '  Press any key to exit...'
-$null = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
