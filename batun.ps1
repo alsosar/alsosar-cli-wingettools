@@ -284,6 +284,96 @@ function Invoke-BatchUninstall {
     Write-Host " / $total total"
 }
 
+function Clear-AllPrinters {
+    $printers = Get-Printer -ErrorAction SilentlyContinue
+    $ports = Get-PrinterPort -ErrorAction SilentlyContinue
+
+    Clear-Host
+    Show-Banner
+    Write-Host ''
+    Write-Host '  ⚠  WARNING: Printer Cleanup' -ForegroundColor Red
+    Write-Host '  ===============================================' -ForegroundColor Red
+    Write-Host '  This will remove ALL printers and printer ports' -ForegroundColor Yellow
+    Write-Host '  from this computer, including network printers.' -ForegroundColor Yellow
+    Write-Host '  ===============================================' -ForegroundColor Red
+    Write-Host ''
+
+    if ($printers) {
+        Write-Host "  Printers to remove ($($printers.Count)):" -ForegroundColor DarkYellow
+        foreach ($p in $printers) { Write-Host "    - $($p.Name)" }
+        Write-Host ''
+    }
+    if ($ports) {
+        Write-Host "  Ports to remove ($($ports.Count)):" -ForegroundColor DarkYellow
+        foreach ($p in $ports) { Write-Host "    - $($p.Name)" }
+        Write-Host ''
+    }
+    if (-not $printers -and -not $ports) {
+        Write-Host '  No printers or ports found.' -ForegroundColor Green
+        Write-Host ''
+        Write-Host '  Press any key to continue...'
+        WaitForKey
+        return
+    }
+
+    Write-Host '  Type ' -NoNewline
+    Write-Host 'REMOVE' -NoNewline -ForegroundColor Red
+    Write-Host ' and press Enter to confirm, or press Enter to cancel:'
+    Write-Host ''
+    $input = Read-Host '  > '
+    if ($input -ne 'REMOVE') {
+        Write-Host '  Cancelled.' -ForegroundColor DarkGray
+        Write-Host ''
+        Write-Host '  Press any key to continue...'
+        WaitForKey
+        return
+    }
+
+    Write-Host ''
+    $ok = 0; $fail = 0
+
+    if ($printers) {
+        Write-Host '  Removing printers...' -ForegroundColor Yellow
+        foreach ($p in $printers) {
+            Write-Host "    $($p.Name) ... " -NoNewline
+            try {
+                Set-Printer -Name $p.Name -Shared $false -ErrorAction SilentlyContinue
+                Remove-Printer -Name $p.Name -ErrorAction SilentlyContinue
+                Write-Host 'OK' -ForegroundColor Green
+                $ok++
+            } catch {
+                Write-Host 'FAILED' -ForegroundColor Red
+                $fail++
+            }
+        }
+    }
+
+    if ($ports) {
+        Write-Host '  Removing ports...' -ForegroundColor Yellow
+        foreach ($p in $ports) {
+            Write-Host "    $($p.Name) ... " -NoNewline
+            try {
+                Remove-PrinterPort -Name $p.Name -ErrorAction SilentlyContinue
+                Write-Host 'OK' -ForegroundColor Green
+                $ok++
+            } catch {
+                Write-Host 'FAILED' -ForegroundColor Red
+                $fail++
+            }
+        }
+    }
+
+    Write-Host ''
+    Write-Host '  Printer cleanup complete: ' -NoNewline
+    Write-Host "$ok done" -NoNewline -ForegroundColor Green
+    Write-Host ', ' -NoNewline
+    Write-Host "$fail failed" -NoNewline -ForegroundColor Red
+    Write-Host ''
+    Write-Host ''
+    Write-Host '  Press any key to continue...'
+    WaitForKey
+}
+
 # ------------------------------------------------------------------
 #  MAIN
 # ------------------------------------------------------------------
@@ -298,90 +388,108 @@ $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administ
 
 if (-not $isAdmin) {
     Write-Host '  [!] Not running as Administrator.' -ForegroundColor Yellow
-    Write-Host '  Some uninstallers may fail without elevation. Press any key to continue...'
+    Write-Host '  Some operations require elevation. Press any key to continue...'
     WaitForKey
-}
-
-Clear-Host
-Show-Banner
-Write-Host ''
-
-Write-Host '  Scanning Programs and Features... ' -NoNewline
-$all = Get-InstalledSoftware
-Write-Host "$($all.Count) programs found." -ForegroundColor Green
-Start-Sleep -Milliseconds 500
-
-if ($all.Count -eq 0) {
-    Write-Host '  No installed programs found.' -ForegroundColor Red
-    Write-Host ''
-    Write-Host '  Press any key to exit...'
-    WaitForKey
-    return
 }
 
 $keepGoing = $true
 while ($keepGoing) {
-    $selected = Show-InteractiveMenu -AllItems $all
-    if (-not $selected -or $selected.Count -eq 0) {
-        Write-Host '  No programs selected. Exiting.' -ForegroundColor DarkGray
+    Clear-Host
+    Show-Banner
+    Write-Host ''
+    Write-Host '  [U] Uninstall Programs' -ForegroundColor Yellow
+    Write-Host '  [P] Printer Cleanup — remove all printers and ports' -ForegroundColor Red
+    Write-Host '  [Q] Quit'
+    Write-Host ''
+
+    $modeKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    switch ([char]$modeKey.Character) {
+        'u' { }
+        'U' { }
+        'p' { Clear-AllPrinters; continue }
+        'P' { Clear-AllPrinters; continue }
+        'q' { $keepGoing = $false; continue }
+        'Q' { $keepGoing = $false; continue }
+        default { continue }
+    }
+
+    Clear-Host
+    Show-Banner
+    Write-Host ''
+
+    Write-Host '  Scanning Programs and Features... ' -NoNewline
+    $all = Get-InstalledSoftware
+    Write-Host "$($all.Count) programs found." -ForegroundColor Green
+    Start-Sleep -Milliseconds 300
+
+    if ($all.Count -eq 0) {
+        Write-Host '  No installed programs found.' -ForegroundColor Red
         Write-Host ''
-        Write-Host '  Press any key to exit...'
+        Write-Host '  Press any key to continue...'
         WaitForKey
-        $keepGoing = $false
         continue
     }
 
-    $confirmed = $false
-    $doMenu = $true
-    while ($doMenu) {
+    $progLoop = $true
+    while ($progLoop) {
+        $selected = Show-InteractiveMenu -AllItems $all
+        if (-not $selected -or $selected.Count -eq 0) {
+            $progLoop = $false
+            continue
+        }
+
+        $confirmed = $false
+        $doMenu = $true
+        while ($doMenu) {
+            Clear-Host
+            Show-Banner
+            Write-Host ''
+            Write-Host '  ===============================================' -ForegroundColor Yellow
+            Write-Host "  You are about to uninstall $($selected.Count) program(s):" -ForegroundColor Yellow
+            foreach ($item in $selected) {
+                Write-Host "    * $($item.DisplayName)" -ForegroundColor DarkYellow
+            }
+            Write-Host '  ===============================================' -ForegroundColor Yellow
+            Write-Host ''
+            Write-Host '  [Y] Proceed with uninstall' -ForegroundColor Green
+            Write-Host '  [N] Cancel — back to program list' -ForegroundColor Yellow
+            Write-Host '  [Q] Main menu'
+            Write-Host ''
+
+            $confirmKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+            switch ([char]$confirmKey.Character) {
+                'y' { $confirmed = $true; $doMenu = $false }
+                'Y' { $confirmed = $true; $doMenu = $false }
+                'n' { $doMenu = $false }
+                'N' { $doMenu = $false }
+                'q' { $doMenu = $false; $progLoop = $false }
+                'Q' { $doMenu = $false; $progLoop = $false }
+            }
+        }
+
+        if (-not $confirmed) { continue }
+
         Clear-Host
         Show-Banner
         Write-Host ''
-        Write-Host '  ===============================================' -ForegroundColor Yellow
-        Write-Host "  You are about to uninstall $($selected.Count) program(s):" -ForegroundColor Yellow
-        foreach ($item in $selected) {
-            Write-Host "    * $($item.DisplayName)" -ForegroundColor DarkYellow
+        Invoke-BatchUninstall -Items $selected
+
+        if ($isAdmin) {
+            Write-Host ''
+            Write-Host '  Tip: Some programs may leave leftovers. Consider running a cleanup tool.' -ForegroundColor DarkGray
+        } else {
+            Write-Host ''
+            Write-Host '  Tip: Run as Administrator for better results with system-level programs.' -ForegroundColor DarkGray
         }
-        Write-Host '  ===============================================' -ForegroundColor Yellow
-        Write-Host ''
-        Write-Host '  [Y] Proceed with uninstall' -ForegroundColor Green
-        Write-Host '  [N] Cancel — back to program list' -ForegroundColor Yellow
-        Write-Host '  [Q] Quit'
-        Write-Host ''
 
-        $confirmKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-        switch ([char]$confirmKey.Character) {
-            'y' { $confirmed = $true; $doMenu = $false }
-            'Y' { $confirmed = $true; $doMenu = $false }
-            'n' { $doMenu = $false }
-            'N' { $doMenu = $false }
-            'q' { $doMenu = $false; $keepGoing = $false }
-            'Q' { $doMenu = $false; $keepGoing = $false }
-        }
+        Write-Host ''
+        Clear-Host
+        Show-Banner
+        Write-Host ''
+        Write-Host '  [Enter] Back to program list' -ForegroundColor Yellow
+        Write-Host '  [M] Main menu'
+        Write-Host ''
+        $exitKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+        if ($exitKey.VirtualKeyCode -eq 81) { $progLoop = $false }
     }
-
-    if (-not $confirmed) { continue }
-
-    Clear-Host
-    Show-Banner
-    Write-Host ''
-    Invoke-BatchUninstall -Items $selected
-
-    if ($isAdmin) {
-        Write-Host ''
-        Write-Host '  Tip: Some programs may leave leftovers. Consider running a cleanup tool.' -ForegroundColor DarkGray
-    } else {
-        Write-Host ''
-        Write-Host '  Tip: Run as Administrator for better results with system-level programs.' -ForegroundColor DarkGray
-    }
-
-    Write-Host ''
-    Clear-Host
-    Show-Banner
-    Write-Host ''
-    Write-Host '  [Enter] Back to program list' -ForegroundColor Yellow
-    Write-Host '  [Q] Quit'
-    Write-Host ''
-    $exitKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-    if ($exitKey.VirtualKeyCode -eq 81) { $keepGoing = $false }
 }
