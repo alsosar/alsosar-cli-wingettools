@@ -9,15 +9,14 @@ $ErrorActionPreference = 'Stop'
 try {
     $buf = $Host.UI.RawUI.BufferSize
     $win = $Host.UI.RawUI.WindowSize
-    foreach ($w in @(140, 130, 120, 110, 100, 90, 80)) {
-        try {
-            $buf.Width = $w; $buf.Height = [Math]::Max(300, $buf.Height)
-            $Host.UI.RawUI.BufferSize = $buf
-            $win.Width = $w; $win.Height = [Math]::Min(50, $buf.Height)
-            $Host.UI.RawUI.WindowSize = $win
-            break
-        } catch {}
-    }
+    $newW = [Math]::Ceiling($win.Width * 1.15)
+    $newH = [Math]::Ceiling($win.Height * 1.15)
+    $buf.Width = [Math]::Max($newW, $buf.Width)
+    $buf.Height = [Math]::Max($newH + 200, $buf.Height)
+    $Host.UI.RawUI.BufferSize = $buf
+    $win.Width = $newW
+    $win.Height = $newH
+    $Host.UI.RawUI.WindowSize = $win
 } catch {}
 
 function Show-Banner {
