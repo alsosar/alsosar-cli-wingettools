@@ -8,13 +8,15 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if ($GUI) {
-    $guiScript = Join-Path $PSScriptRoot 'batun-gui.ps1'
-    if (Test-Path $guiScript) {
-        & $guiScript
-    } else {
-        Write-Host 'Downloading GUI component...'
-        irm https://raw.githubusercontent.com/alsosram/cli-wingettools/master/batun-gui.ps1 | iex
+    if ($PSScriptRoot) {
+        $guiScript = Join-Path $PSScriptRoot 'batun-gui.ps1'
+        if (Test-Path $guiScript) {
+            & $guiScript
+            return
+        }
     }
+    Write-Host 'Downloading GUI component...'
+    irm https://raw.githubusercontent.com/alsosram/cli-wingettools/master/batun-gui.ps1 | iex
     return
 }
 
