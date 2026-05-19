@@ -568,54 +568,7 @@ function Import-WingetPackages {
     WaitForKey
 }
 
-# ------------------------------------------------------------------
-#  MAIN
-# ------------------------------------------------------------------
-
-Clear-Host
-Show-Banner
-Write-Host ''
-
-$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-$principal = New-Object Security.Principal.WindowsPrincipal($identity)
-$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
-if (-not $isAdmin) {
-    Write-Host '  [!] Not running as Administrator.' -ForegroundColor Yellow
-    Write-Host '  Some operations require elevation. Press any key to continue...'
-    WaitForKey
-}
-
-$keepGoing = $true
-while ($keepGoing) {
-    Clear-Host
-    Show-Banner
-    Write-Host ''
-    Write-Host '  [U] Uninstall Programs' -ForegroundColor Yellow
-    Write-Host '  [G] Upgrade All Software (winget)' -ForegroundColor Green
-    Write-Host '  [E] Export installed packages to file' -ForegroundColor Cyan
-    Write-Host '  [I] Import packages from file' -ForegroundColor Cyan
-    Write-Host '  [P] Printer Cleanup — remove all printers and ports' -ForegroundColor Red
-    Write-Host '  [Q] Quit'
-    Write-Host ''
-
-    $modeKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-    switch ([char]$modeKey.Character) {
-        'g' { Run-AllUpgrades; continue }
-        'G' { Run-AllUpgrades; continue }
-        'e' { Export-WingetPackages; continue }
-        'E' { Export-WingetPackages; continue }
-        'i' { Import-WingetPackages; continue }
-        'I' { Import-WingetPackages; continue }
-        'p' { Clear-AllPrinters; continue }
-        'P' { Clear-AllPrinters; continue }
-        'q' { $keepGoing = $false; continue }
-        'Q' { $keepGoing = $false; continue }
-        'u' { }
-        'U' { }
-        default { continue }
-    }
-
+function Show-UninstallMenu {
     Clear-Host
     Show-Banner
     Write-Host ''
@@ -630,7 +583,7 @@ while ($keepGoing) {
         Write-Host ''
         Write-Host '  Press any key to continue...'
         WaitForKey
-        continue
+        return
     }
 
     $progLoop = $true
@@ -694,5 +647,53 @@ while ($keepGoing) {
         Write-Host ''
         $exitKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
         if ($exitKey.VirtualKeyCode -eq 81) { $progLoop = $false }
+    }
+}
+
+# ------------------------------------------------------------------
+#  MAIN
+# ------------------------------------------------------------------
+
+Clear-Host
+Show-Banner
+Write-Host ''
+
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $isAdmin) {
+    Write-Host '  [!] Not running as Administrator.' -ForegroundColor Yellow
+    Write-Host '  Some operations require elevation. Press any key to continue...'
+    WaitForKey
+}
+
+$keepGoing = $true
+while ($keepGoing) {
+    Clear-Host
+    Show-Banner
+    Write-Host ''
+    Write-Host '  [U] Uninstall Programs' -ForegroundColor Yellow
+    Write-Host '  [G] Upgrade All Software (winget)' -ForegroundColor Green
+    Write-Host '  [E] Export installed packages to file' -ForegroundColor Cyan
+    Write-Host '  [I] Import packages from file' -ForegroundColor Cyan
+    Write-Host '  [P] Printer Cleanup — remove all printers and ports' -ForegroundColor Red
+    Write-Host '  [Q] Quit'
+    Write-Host ''
+
+    $modeKey = $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+    switch ([char]$modeKey.Character) {
+        'g' { Run-AllUpgrades }
+        'G' { Run-AllUpgrades }
+        'e' { Export-WingetPackages }
+        'E' { Export-WingetPackages }
+        'i' { Import-WingetPackages }
+        'I' { Import-WingetPackages }
+        'p' { Clear-AllPrinters }
+        'P' { Clear-AllPrinters }
+        'q' { $keepGoing = $false; continue }
+        'Q' { $keepGoing = $false; continue }
+        'u' { Show-UninstallMenu }
+        'U' { Show-UninstallMenu }
     }
 }
